@@ -171,3 +171,35 @@ $ ./run.sh --package requests --repo https://pypi.org/pypi --output
 $ ./run.sh --package a --package b --repo https://pypi.org/pypi --output graph.svg
 Ошибка: опция указана дважды: --package
 ```
+
+## Тестовые команды этапа 1
+
+Юнит-тесты (интернет не нужен):
+
+```
+make test
+```
+
+Параметры выводятся в формате ключ-значение:
+
+```
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.svg
+# package = requests
+# repo = https://pypi.org/pypi
+# mode = real
+# output = graph.svg
+```
+
+Проверка обработки ошибок (каждая команда завершается сообщением
+`Ошибка: ...` и кодом 1):
+
+```
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.png
+./run.sh --package requests --repo https://pypi.org/pypi --mode foo --output graph.svg
+./run.sh --package requests --repo ftp://example.org --output graph.svg
+./run.sh --package requests --output graph.svg
+./run.sh --package --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package requests --package pip --repo https://pypi.org/pypi --output graph.svg
+./run.sh --unknown x --package requests --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package requests --repo no-such-file.txt --mode test --output graph.svg
+```
