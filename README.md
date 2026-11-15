@@ -413,3 +413,40 @@ $ ./run.sh --package -requests --repo https://pypi.org/pypi --output graph.svg
 $ ./run.sh --package requests --repo ftp://example.org --output graph.svg
 Ошибка: URL репозитория должен начинаться с http:// или https://
 ```
+
+## Тестовые команды этапа 4
+
+Юнит-тесты (интернет не нужен):
+
+```
+make test
+```
+
+Обратные зависимости без циклов (`tests/data/simple.txt`):
+
+```
+./run.sh --package D --repo tests/data/simple.txt --mode test --output graph.svg --reverse
+./run.sh --package F --repo tests/data/simple.txt --mode test --output graph.svg --reverse
+./run.sh --package A --repo tests/data/simple.txt --mode test --output graph.svg --reverse
+```
+
+Обратные зависимости при циклах (`tests/data/cycle.txt`):
+
+```
+./run.sh --package A --repo tests/data/cycle.txt --mode test --output graph.svg --reverse
+./run.sh --package D --repo tests/data/cycle.txt --mode test --output graph.svg --reverse
+```
+
+Обычный граф для сравнения (без `--reverse`):
+
+```
+./run.sh --package A --repo tests/data/simple.txt --mode test --output graph.svg
+```
+
+Ошибки:
+
+```
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.svg --reverse
+./run.sh --package Z --repo tests/data/simple.txt --mode test --output graph.svg --reverse
+./run.sh --package A --repo tests/data/simple.txt --mode test --output graph.svg --reverse --reverse
+```
