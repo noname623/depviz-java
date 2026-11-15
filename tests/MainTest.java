@@ -1,16 +1,19 @@
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Тесты главного класса: параметры и вывод зависимостей.
+ * Тесты главного класса: параметры и вывод графа.
  */
 public class MainTest {
 
     private static final String REPO_URL = "https://pypi.org/pypi";
+    private static final String SIMPLE = RepoFileTest.DATA + "simple.txt";
+    private static final String CYCLE = RepoFileTest.DATA + "cycle.txt";
+    private static final String BAD = RepoFileTest.DATA + "bad.txt";
 
     /**
      * Результат запуска программы в тесте.
@@ -57,6 +60,18 @@ public class MainTest {
     }
 
     /**
+     * Запустить программу в режиме test.
+     *
+     * @param path путь к файлу тестового репозитория
+     * @param packageName имя пакета
+     * @return результат запуска
+     */
+    static Result runTest(String path, String packageName) {
+        return runMain("--package", packageName, "--repo", path,
+                "--mode", "test", "--output", "graph.svg");
+    }
+
+    /**
      * Проверить, что программа завершилась с ошибкой.
      *
      * @param text ожидаемая часть сообщения об ошибке
@@ -70,30 +85,31 @@ public class MainTest {
     }
 
     /**
-     * Создать временный файл, который удалится после тестов.
-     *
-     * @return путь к файлу
-     * @throws IOException если файл не удалось создать
-     */
-    static String makeTempFile() throws IOException {
-        File file = File.createTempFile("repo", ".txt");
-        file.deleteOnExit();
-        return file.getPath();
-    }
-
-    /**
      * Добавить тесты этого класса в общий запуск.
      *
      * @param runner объект для запуска тестов
      */
     public static void addTo(TestRunner runner) {
-        runner.run("вывод прямых зависимостей", MainTest::testPrintDeps);
-        runner.run("пакет без зависимостей", MainTest::testNoDeps);
-        runner.run("пакета нет в репозитории", MainTest::testNotFound);
-        runner.run("режим test пока не работает", MainTest::testTestMode);
-        runner.run("неверное имя пакета pip", MainTest::testBadPipName);
+        runner.run("граф из тестового файла", MainTest::testSimpleGraph);
+        runner.run("граф с циклами", MainTest::testCycleGraph);
+        runner.run("граф от середины", MainTest::testMiddle);
+        runner.run("пакета нет в файле", MainTest::testNotInFile);
+        runner.run("ошибка в тестовом файле", MainTest::testBadFile);
+        runner.run("имя в режиме test", MainTest::testBadTestName);
+        runner.run("граф из PyPI", MainTest::testRealGraph);
+        runner.run("пакета нет в PyPI", MainTest::testNotFound);
+        addErrorTests(runner);
+    }
+
+    /**
+     * Добавить тесты ошибок в параметрах.
+     *
+     * @param runner объект для запуска тестов
+     */
+    static void addErrorTests(TestRunner runner) {
         runner.run("нет имени пакета", MainTest::testNoPackage);
         runner.run("пробел в имени пакета", MainTest::testPackageSpace);
+        runner.run("неверное имя пакета pip", MainTest::testBadPipName);
         runner.run("нет репозитория", MainTest::testNoRepo);
         runner.run("неверный URL", MainTest::testBadUrl);
         runner.run("нет тестового файла", MainTest::testNoTestFile);
@@ -105,50 +121,74 @@ public class MainTest {
         runner.run("опция дважды", MainTest::testTwice);
     }
 
+    /** Выводится весь граф с транзитивными зависимостями. */
+    static void testSimpleGraph() {
+        Result result = runTest(SIMPLE, "A");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        String expected = String.join(System.lineSeparator(),
+                "Граф зависимостей пакета A:", "A -> B, C", "B -> D",
+                "C -> D, E", "D -> нет зависимостей", "E -> F",
+                "F -> нет зависимостей", "");
+        TestRunner.assertEquals(expected, result.out);
+    }
+
+    /** Граф с циклами выводится без зацикливания. */
+    static void testCycleGraph() {
+        Result result = runTest(CYCLE, "A");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        TestRunner.assertContains("C -> A, D", result.out);
+        TestRunner.assertContains("D -> D", result.out);
+    }
+
+    /** Граф строится от заданного пакета. */
+    static void testMiddle() {
+        Result result = runTest(SIMPLE, "E");
+        TestRunner.assertContains("E -> F", result.out);
+        TestRunner.assertEquals(false, result.out.contains("A ->"));
+    }
+
+    /** Пакета нет в файле тестового репозитория. */
+    static void testNotInFile() {
+        checkError("пакет Z не найден", "--package", "Z", "--repo", SIMPLE,
+                "--mode", "test", "--output", "g.svg");
+    }
+
+    /** Ошибка в файле тестового репозитория. */
+    static void testBadFile() {
+        checkError("строка 2", "--package", "A", "--repo", BAD,
+                "--mode", "test", "--output", "g.svg");
+    }
+
+    /** В режиме test имя пакета - большие латинские буквы. */
+    static void testBadTestName() {
+        checkError("больших латинских букв", "--package", "a",
+                "--repo", SIMPLE, "--mode", "test", "--output", "g.svg");
+    }
+
     /**
-     * Запустить программу на поддельном репозитории с одним пакетом.
+     * Граф строится по описаниям пакетов из репозитория.
      *
-     * @param name имя пакета в репозитории
-     * @param json JSON-описание пакета
-     * @param asked имя пакета, которое передаётся программе
-     * @return результат запуска
      * @throws IOException если сервер не запустился
      */
-    static Result runWithRepo(String name, String json, String asked)
-            throws IOException {
-        FakeRepo repo = new FakeRepo(Map.of("/pypi/" + name + "/json", json));
+    static void testRealGraph() throws IOException {
+        Map<String, String> pages = new HashMap<>();
+        pages.put("/pypi/requests/json", PyPiTest.REQUESTS_JSON);
+        pages.put("/pypi/idna/json", PyPiTest.NO_DEPS_JSON);
+        pages.put("/pypi/certifi/json", PyPiTest.NO_DEPS_JSON);
+        pages.put("/pypi/urllib3/json", PyPiTest.NO_DEPS_JSON);
+        pages.put("/pypi/charset-normalizer/json", PyPiTest.NO_DEPS_JSON);
+        FakeRepo repo = new FakeRepo(pages);
         try {
-            return runMain("--package", asked, "--repo", repo.url(),
-                    "--output", "graph.svg");
+            Result result = runMain("--package", "Requests", "--repo",
+                    repo.url(), "--output", "graph.svg");
+            TestRunner.assertEquals(Main.EXIT_OK, result.code);
+            TestRunner.assertContains("requests -> charset-normalizer, "
+                    + "idna, urllib3, certifi", result.out);
+            TestRunner.assertContains("idna -> нет зависимостей",
+                    result.out);
         } finally {
             repo.stop();
         }
-    }
-
-    /**
-     * Выводятся все прямые зависимости пакета.
-     *
-     * @throws IOException если сервер не запустился
-     */
-    static void testPrintDeps() throws IOException {
-        Result result = runWithRepo("requests", PyPiTest.REQUESTS_JSON,
-                "requests");
-        TestRunner.assertEquals(Main.EXIT_OK, result.code);
-        TestRunner.assertContains("Прямые зависимости пакета requests:",
-                result.out);
-        TestRunner.assertContains("idna<4,>=2.5", result.out);
-        TestRunner.assertContains("extra == \"socks\"", result.out);
-    }
-
-    /**
-     * Сообщение, если у пакета нет зависимостей.
-     *
-     * @throws IOException если сервер не запустился
-     */
-    static void testNoDeps() throws IOException {
-        Result result = runWithRepo("idna", PyPiTest.NO_DEPS_JSON, "idna");
-        TestRunner.assertEquals(Main.EXIT_OK, result.code);
-        TestRunner.assertContains("нет зависимостей", result.out);
     }
 
     /**
@@ -157,28 +197,13 @@ public class MainTest {
      * @throws IOException если сервер не запустился
      */
     static void testNotFound() throws IOException {
-        Result result = runWithRepo("idna", PyPiTest.NO_DEPS_JSON, "nothing");
-        TestRunner.assertEquals(Main.EXIT_ERROR, result.code);
-        TestRunner.assertContains("код ответа 404", result.err);
-    }
-
-    /**
-     * Режим test пока не поддерживается.
-     *
-     * @throws IOException если не удалось создать временный файл
-     */
-    static void testTestMode() throws IOException {
-        checkError("пока не поддерживается", "--package", "A",
-                "--repo", makeTempFile(), "--mode", "test",
-                "--output", "graph.svg");
-    }
-
-    /** Имя пакета не подходит для pip. */
-    static void testBadPipName() {
-        checkError("имя пакета pip", "--package", "-requests",
-                "--repo", REPO_URL, "--output", "g.svg");
-        checkError("имя пакета pip", "--package", "a/b",
-                "--repo", REPO_URL, "--output", "g.svg");
+        FakeRepo repo = new FakeRepo(new HashMap<>());
+        try {
+            checkError("код ответа 404", "--package", "nothing",
+                    "--repo", repo.url(), "--output", "graph.svg");
+        } finally {
+            repo.stop();
+        }
     }
 
     /** Не задано имя пакета. */
@@ -191,6 +216,14 @@ public class MainTest {
     static void testPackageSpace() {
         checkError("пробелы", "--package", "a b", "--repo", REPO_URL,
                 "--output", "g.svg");
+    }
+
+    /** Имя пакета не подходит для pip. */
+    static void testBadPipName() {
+        checkError("имя пакета pip", "--package", "-requests",
+                "--repo", REPO_URL, "--output", "g.svg");
+        checkError("имя пакета pip", "--package", "a/b",
+                "--repo", REPO_URL, "--output", "g.svg");
     }
 
     /** Не задан репозиторий. */

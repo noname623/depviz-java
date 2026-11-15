@@ -38,6 +38,10 @@ public class PyPiTest {
         runner.run("испорченный JSON", PyPiTest::testBrokenJson);
         runner.run("загрузка с сервера", PyPiTest::testDownload);
         runner.run("ошибка 404", PyPiTest::testNotFound);
+        runner.run("имя из требования", PyPiTest::testReadName);
+        runner.run("зависимость extra", PyPiTest::testIsExtra);
+        runner.run("единый вид имени", PyPiTest::testNormalizeName);
+        runner.run("имена для графа", PyPiTest::testDependencyNames);
     }
 
     /** Адрес составляется из репозитория и имени пакета. */
@@ -146,5 +150,49 @@ public class PyPiTest {
             repo.stop();
         }
         throw new AssertionError("ошибка не возникла");
+    }
+
+    /** Имя пакета берётся из начала строки требования. */
+    static void testReadName() {
+        TestRunner.assertEquals("idna", PyPi.readName("idna<4,>=2.5"));
+        TestRunner.assertEquals("PySocks",
+                PyPi.readName("PySocks!=1.5.7; extra == \"socks\""));
+        TestRunner.assertEquals("zope.interface",
+                PyPi.readName("zope.interface (>=5)"));
+        TestRunner.assertEquals("urllib3", PyPi.readName("urllib3[socks]"));
+    }
+
+    /** Зависимости с условием extra распознаются. */
+    static void testIsExtra() {
+        TestRunner.assertEquals(true,
+                PyPi.isExtra("PySocks>=1.5.6; extra == \"socks\""));
+        TestRunner.assertEquals(false, PyPi.isExtra("idna<4,>=2.5"));
+        TestRunner.assertEquals(false,
+                PyPi.isExtra("tomli; python_version < \"3.11\""));
+    }
+
+    /** Имя приводится к маленьким буквам и дефисам. */
+    static void testNormalizeName() {
+        TestRunner.assertEquals("charset-normalizer",
+                PyPi.normalizeName("Charset_Normalizer"));
+        TestRunner.assertEquals("zope-interface",
+                PyPi.normalizeName("zope.interface"));
+    }
+
+    /**
+     * Для графа берутся имена без extra, без повторов.
+     *
+     * @throws IOException если сервер не запустился
+     */
+    static void testDependencyNames() throws IOException {
+        FakeRepo repo = new FakeRepo(
+                Map.of("/pypi/requests/json", REQUESTS_JSON));
+        try {
+            TestRunner.assertEquals(Arrays.asList("charset-normalizer",
+                    "idna", "urllib3", "certifi"),
+                    PyPi.getDependencyNames(repo.url(), "requests"));
+        } finally {
+            repo.stop();
+        }
     }
 }

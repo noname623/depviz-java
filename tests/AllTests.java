@@ -12,6 +12,8 @@ public class AllTests {
         TestRunner runner = new TestRunner();
         MainTest.addTo(runner);
         PyPiTest.addTo(runner);
+        RepoFileTest.addTo(runner);
+        GraphTest.addTo(runner);
         System.exit(runner.finish());
     }
 }
