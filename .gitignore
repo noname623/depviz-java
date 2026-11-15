@@ -1,0 +1,13 @@
+build/
+out/
+*.class
+*.jar
+*.war
+*.zip
+*.tar.gz
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
