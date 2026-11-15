@@ -326,3 +326,42 @@ $ ./run.sh --package -requests --repo https://pypi.org/pypi --output graph.svg
 $ ./run.sh --package requests --repo ftp://example.org --output graph.svg
 Ошибка: URL репозитория должен начинаться с http:// или https://
 ```
+
+## Тестовые команды этапа 3
+
+Юнит-тесты (интернет не нужен):
+
+```
+make test
+```
+
+Граф без циклов и граф от пакета в середине (`tests/data/simple.txt`):
+
+```
+./run.sh --package A --repo tests/data/simple.txt --mode test --output graph.svg
+./run.sh --package E --repo tests/data/simple.txt --mode test --output graph.svg
+```
+
+Циклические зависимости (`tests/data/cycle.txt`):
+
+```
+./run.sh --package A --repo tests/data/cycle.txt --mode test --output graph.svg
+./run.sh --package C --repo tests/data/cycle.txt --mode test --output graph.svg
+./run.sh --package D --repo tests/data/cycle.txt --mode test --output graph.svg
+```
+
+Ошибки тестового режима:
+
+```
+./run.sh --package A --repo tests/data/bad.txt --mode test --output graph.svg
+./run.sh --package Z --repo tests/data/simple.txt --mode test --output graph.svg
+./run.sh --package a --repo tests/data/simple.txt --mode test --output graph.svg
+./run.sh --package A --repo no-such-file.txt --mode test --output graph.svg
+```
+
+Реальный репозиторий (нужен интернет):
+
+```
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package no-such-package-xyz --repo https://pypi.org/pypi --output graph.svg
+```
