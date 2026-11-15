@@ -3,9 +3,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
- * Тесты главного класса: разбор и проверка параметров.
+ * Тесты главного класса: параметры и вывод зависимостей.
  */
 public class MainTest {
 
@@ -86,8 +87,11 @@ public class MainTest {
      * @param runner объект для запуска тестов
      */
     public static void addTo(TestRunner runner) {
-        runner.run("все параметры выводятся", MainTest::testPrintParams);
-        runner.run("режим test с файлом", MainTest::testTestMode);
+        runner.run("вывод прямых зависимостей", MainTest::testPrintDeps);
+        runner.run("пакет без зависимостей", MainTest::testNoDeps);
+        runner.run("пакета нет в репозитории", MainTest::testNotFound);
+        runner.run("режим test пока не работает", MainTest::testTestMode);
+        runner.run("неверное имя пакета pip", MainTest::testBadPipName);
         runner.run("нет имени пакета", MainTest::testNoPackage);
         runner.run("пробел в имени пакета", MainTest::testPackageSpace);
         runner.run("нет репозитория", MainTest::testNoRepo);
@@ -101,28 +105,80 @@ public class MainTest {
         runner.run("опция дважды", MainTest::testTwice);
     }
 
-    /** Все параметры выводятся в формате ключ-значение. */
-    static void testPrintParams() {
-        Result result = runMain("--package", "requests", "--repo", REPO_URL,
-                "--output", "graph.svg");
-        TestRunner.assertEquals(Main.EXIT_OK, result.code);
-        TestRunner.assertContains("package = requests", result.out);
-        TestRunner.assertContains("repo = " + REPO_URL, result.out);
-        TestRunner.assertContains("mode = real", result.out);
-        TestRunner.assertContains("output = graph.svg", result.out);
+    /**
+     * Запустить программу на поддельном репозитории с одним пакетом.
+     *
+     * @param name имя пакета в репозитории
+     * @param json JSON-описание пакета
+     * @param asked имя пакета, которое передаётся программе
+     * @return результат запуска
+     * @throws IOException если сервер не запустился
+     */
+    static Result runWithRepo(String name, String json, String asked)
+            throws IOException {
+        FakeRepo repo = new FakeRepo(Map.of("/pypi/" + name + "/json", json));
+        try {
+            return runMain("--package", asked, "--repo", repo.url(),
+                    "--output", "graph.svg");
+        } finally {
+            repo.stop();
+        }
     }
 
     /**
-     * В режиме test принимается существующий файл.
+     * Выводятся все прямые зависимости пакета.
+     *
+     * @throws IOException если сервер не запустился
+     */
+    static void testPrintDeps() throws IOException {
+        Result result = runWithRepo("requests", PyPiTest.REQUESTS_JSON,
+                "requests");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        TestRunner.assertContains("Прямые зависимости пакета requests:",
+                result.out);
+        TestRunner.assertContains("idna<4,>=2.5", result.out);
+        TestRunner.assertContains("extra == \"socks\"", result.out);
+    }
+
+    /**
+     * Сообщение, если у пакета нет зависимостей.
+     *
+     * @throws IOException если сервер не запустился
+     */
+    static void testNoDeps() throws IOException {
+        Result result = runWithRepo("idna", PyPiTest.NO_DEPS_JSON, "idna");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        TestRunner.assertContains("нет зависимостей", result.out);
+    }
+
+    /**
+     * Пакета нет в репозитории: ошибка 404.
+     *
+     * @throws IOException если сервер не запустился
+     */
+    static void testNotFound() throws IOException {
+        Result result = runWithRepo("idna", PyPiTest.NO_DEPS_JSON, "nothing");
+        TestRunner.assertEquals(Main.EXIT_ERROR, result.code);
+        TestRunner.assertContains("код ответа 404", result.err);
+    }
+
+    /**
+     * Режим test пока не поддерживается.
      *
      * @throws IOException если не удалось создать временный файл
      */
     static void testTestMode() throws IOException {
-        String path = makeTempFile();
-        Result result = runMain("--package", "A", "--repo", path,
-                "--mode", "test", "--output", "graph.svg");
-        TestRunner.assertEquals(Main.EXIT_OK, result.code);
-        TestRunner.assertContains("mode = test", result.out);
+        checkError("пока не поддерживается", "--package", "A",
+                "--repo", makeTempFile(), "--mode", "test",
+                "--output", "graph.svg");
+    }
+
+    /** Имя пакета не подходит для pip. */
+    static void testBadPipName() {
+        checkError("имя пакета pip", "--package", "-requests",
+                "--repo", REPO_URL, "--output", "g.svg");
+        checkError("имя пакета pip", "--package", "a/b",
+                "--repo", REPO_URL, "--output", "g.svg");
     }
 
     /** Не задано имя пакета. */

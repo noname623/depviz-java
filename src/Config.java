@@ -35,6 +35,8 @@ public class Config {
     private static final String HTTP_PREFIX = "http://";
     private static final String HTTPS_PREFIX = "https://";
     private static final String IMAGE_EXTENSION = ".svg";
+    private static final String PIP_NAME_PATTERN =
+            "[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?";
 
     private final String packageName;
     private final String repo;
@@ -154,7 +156,11 @@ public class Config {
     /**
      * Проверить имя анализируемого пакета.
      *
-     * @throws IllegalArgumentException если имя пустое или с пробелами
+     * <p>В режиме real имя должно быть именем пакета pip:
+     * латинские буквы, цифры и знаки . - _ внутри.</p>
+     *
+     * @throws IllegalArgumentException если имя пустое, с пробелами
+     *         или не подходит для pip
      */
     private void checkPackage() {
         if (isBlank(packageName)) {
@@ -164,6 +170,13 @@ public class Config {
         if (packageName.contains(" ")) {
             throw new IllegalArgumentException(
                     "имя пакета не должно содержать пробелы");
+        }
+        if (MODE_REAL.equals(mode)
+                && !packageName.matches(PIP_NAME_PATTERN)) {
+            throw new IllegalArgumentException(
+                    "имя пакета pip может содержать только латинские "
+                    + "буквы, цифры и знаки . - _ и должно начинаться "
+                    + "и заканчиваться буквой или цифрой");
         }
     }
 

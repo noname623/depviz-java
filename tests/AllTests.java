@@ -11,6 +11,7 @@ public class AllTests {
     public static void main(String[] args) {
         TestRunner runner = new TestRunner();
         MainTest.addTo(runner);
+        PyPiTest.addTo(runner);
         System.exit(runner.finish());
     }
 }
