@@ -214,3 +214,27 @@ $ ./run.sh --package requests --repo https://pypi.org/pypi --output graph.png
 $ ./run.sh --package requests --repo https://pypi.org/pypi --output graph.svg --color red
 Ошибка: неизвестная опция: --color
 ```
+
+## Тестовые команды этапа 2
+
+Юнит-тесты (интернет не нужен, тесты запускают поддельный репозиторий):
+
+```
+make test
+```
+
+Прямые зависимости пакетов из PyPI (нужен интернет):
+
+```
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package flask --repo https://pypi.org/pypi --output graph.svg
+```
+
+Проверка обработки ошибок:
+
+```
+./run.sh --package no-such-package-xyz --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package -requests --repo https://pypi.org/pypi --output graph.svg
+./run.sh --package requests --repo ftp://example.org --output graph.svg
+./run.sh --package requests --repo https://pypi.org/pypi --output graph.png
+```
