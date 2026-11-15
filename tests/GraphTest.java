@@ -44,6 +44,7 @@ public class GraphTest {
         runner.run("цикл A -> B -> C -> A", GraphTest::testCycle);
         runner.run("пакет зависит сам от себя", GraphTest::testSelfLoop);
         runner.run("общая зависимость один раз", GraphTest::testShared);
+        runner.run("BFS по обратным стрелкам", GraphTest::testReverseBfs);
     }
 
     /** В граф попадают и прямые, и транзитивные зависимости. */
@@ -93,5 +94,13 @@ public class GraphTest {
                 "D:");
         TestRunner.assertEquals(Arrays.asList("A", "B", "C", "D"),
                 new ArrayList<>(build(repo, "A").keySet()));
+    }
+
+    /** Тот же BFS по обратному репозиторию находит все зависящие пакеты. */
+    static void testReverseBfs() {
+        Map<String, List<String>> repo = repo("A: B", "B: C", "D: C", "C:");
+        Map<String, List<String>> graph = build(RepoFile.reverse(repo), "C");
+        TestRunner.assertEquals(Arrays.asList("C", "B", "D", "A"),
+                new ArrayList<>(graph.keySet()));
     }
 }

@@ -143,4 +143,46 @@ public class RepoFile {
             Map<String, List<String>> repo, String name) {
         return repo.getOrDefault(name, new ArrayList<>());
     }
+
+    /**
+     * Проверить, упоминается ли пакет в тестовом репозитории.
+     *
+     * @param repo тестовый репозиторий
+     * @param name имя пакета
+     * @return true, если пакет описан своей строкой или указан
+     *         как зависимость другого пакета
+     */
+    public static boolean contains(Map<String, List<String>> repo,
+                                   String name) {
+        if (repo.containsKey(name)) {
+            return true;
+        }
+        for (List<String> dependencies : repo.values()) {
+            if (dependencies.contains(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Построить обратный репозиторий: все стрелки направлены наоборот.
+     *
+     * <p>Если в файле A зависит от B, то в обратном репозитории
+     * у B будет запись A: от B зависит A.</p>
+     *
+     * @param repo тестовый репозиторий
+     * @return словарь: пакет -> пакеты, которые напрямую от него зависят
+     */
+    public static Map<String, List<String>> reverse(
+            Map<String, List<String>> repo) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : repo.entrySet()) {
+            for (String dependency : entry.getValue()) {
+                result.putIfAbsent(dependency, new ArrayList<>());
+                result.get(dependency).add(entry.getKey());
+            }
+        }
+        return result;
+    }
 }

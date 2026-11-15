@@ -25,6 +25,8 @@ public class RepoFileTest {
         runner.run("пакет без своей строки", RepoFileTest::testMissing);
         runner.run("чтение файла", RepoFileTest::testLoad);
         runner.run("файла нет", RepoFileTest::testNoFile);
+        runner.run("обратный репозиторий", RepoFileTest::testReverse);
+        runner.run("пакет упомянут в файле", RepoFileTest::testContains);
     }
 
     /** Строки разбираются в словарь, пустые строки пропускаются. */
@@ -101,5 +103,24 @@ public class RepoFileTest {
             return;
         }
         throw new AssertionError("ошибка не возникла");
+    }
+
+    /** В обратном репозитории стрелки направлены наоборот. */
+    static void testReverse() {
+        Map<String, List<String>> repo = RepoFile.parse(
+                Arrays.asList("A: B C", "B: C", "C:"));
+        Map<String, List<String>> reversed = RepoFile.reverse(repo);
+        TestRunner.assertEquals(Arrays.asList("A"), reversed.get("B"));
+        TestRunner.assertEquals(Arrays.asList("A", "B"), reversed.get("C"));
+        TestRunner.assertEquals(false, reversed.containsKey("A"));
+    }
+
+    /** Пакет найден, если он описан строкой или указан как зависимость. */
+    static void testContains() {
+        Map<String, List<String>> repo = RepoFile.parse(
+                Arrays.asList("A: B"));
+        TestRunner.assertEquals(true, RepoFile.contains(repo, "A"));
+        TestRunner.assertEquals(true, RepoFile.contains(repo, "B"));
+        TestRunner.assertEquals(false, RepoFile.contains(repo, "C"));
     }
 }

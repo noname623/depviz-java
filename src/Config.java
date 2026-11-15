@@ -29,9 +29,14 @@ public class Config {
     /** Опция имени файла с изображением графа. */
     public static final String OPTION_OUTPUT = "--output";
 
+    /** Опция-флаг режима вывода обратных зависимостей (без значения). */
+    public static final String OPTION_REVERSE = "--reverse";
+
     private static final String[] OPTIONS = {
-        OPTION_PACKAGE, OPTION_REPO, OPTION_MODE, OPTION_OUTPUT
+        OPTION_PACKAGE, OPTION_REPO, OPTION_MODE, OPTION_OUTPUT,
+        OPTION_REVERSE
     };
+    private static final String FLAG_ON = "on";
     private static final String HTTP_PREFIX = "http://";
     private static final String HTTPS_PREFIX = "https://";
     private static final String IMAGE_EXTENSION = ".svg";
@@ -42,6 +47,7 @@ public class Config {
     private final String repo;
     private final String mode;
     private final String output;
+    private final boolean reverse;
 
     /**
      * Создать набор параметров.
@@ -50,13 +56,15 @@ public class Config {
      * @param repo URL репозитория или путь к тестовому файлу
      * @param mode режим работы с репозиторием
      * @param output имя файла с изображением графа
+     * @param reverse true, если нужно вывести обратные зависимости
      */
     public Config(String packageName, String repo, String mode,
-                  String output) {
+                  String output, boolean reverse) {
         this.packageName = packageName;
         this.repo = repo;
         this.mode = mode;
         this.output = output;
+        this.reverse = reverse;
     }
 
     /**
@@ -70,13 +78,16 @@ public class Config {
         Map<String, String> values = readOptions(args);
         String mode = values.getOrDefault(OPTION_MODE, MODE_REAL);
         Config config = new Config(values.get(OPTION_PACKAGE),
-                values.get(OPTION_REPO), mode, values.get(OPTION_OUTPUT));
+                values.get(OPTION_REPO), mode, values.get(OPTION_OUTPUT),
+                values.containsKey(OPTION_REVERSE));
         config.check();
         return config;
     }
 
     /**
      * Прочитать пары "опция значение" из аргументов.
+     *
+     * <p>Опция --reverse пишется без значения.</p>
      *
      * @param args аргументы командной строки
      * @return словарь: опция -> значение
@@ -85,7 +96,8 @@ public class Config {
      */
     private static Map<String, String> readOptions(String[] args) {
         Map<String, String> values = new HashMap<>();
-        for (int i = 0; i < args.length; i += 2) {
+        int i = 0;
+        while (i < args.length) {
             String option = args[i];
             if (!isKnownOption(option)) {
                 throw new IllegalArgumentException(
@@ -95,11 +107,17 @@ public class Config {
                 throw new IllegalArgumentException(
                         "опция указана дважды: " + option);
             }
+            if (OPTION_REVERSE.equals(option)) {
+                values.put(option, FLAG_ON);
+                i++;
+                continue;
+            }
             if (i + 1 >= args.length) {
                 throw new IllegalArgumentException(
                         "не задано значение опции " + option);
             }
             values.put(option, args[i + 1]);
+            i += 2;
         }
         return values;
     }
@@ -139,6 +157,23 @@ public class Config {
         checkPackage();
         checkRepo();
         checkOutput();
+        checkReverse();
+    }
+
+    /**
+     * Проверить режим вывода обратных зависимостей.
+     *
+     * <p>Чтобы найти пакеты, которые зависят от данного, нужно знать
+     * описания всех пакетов репозитория. Это возможно только для
+     * тестового репозитория.</p>
+     *
+     * @throws IllegalArgumentException если --reverse задан в режиме real
+     */
+    private void checkReverse() {
+        if (reverse && MODE_REAL.equals(mode)) {
+            throw new IllegalArgumentException("обратные зависимости "
+                    + "(--reverse) выводятся только в режиме test");
+        }
     }
 
     /**
@@ -258,5 +293,14 @@ public class Config {
      */
     public String getOutput() {
         return output;
+    }
+
+    /**
+     * Узнать, нужно ли вывести обратные зависимости.
+     *
+     * @return true, если задана опция --reverse
+     */
+    public boolean isReverse() {
+        return reverse;
     }
 }

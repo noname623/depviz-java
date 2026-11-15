@@ -97,6 +97,12 @@ public class MainTest {
         runner.run("ошибка в тестовом файле", MainTest::testBadFile);
         runner.run("имя в режиме test", MainTest::testBadTestName);
         runner.run("граф из PyPI", MainTest::testRealGraph);
+        runner.run("обратные зависимости D", MainTest::testReverseShared);
+        runner.run("обратные зависимости F", MainTest::testReverseDeep);
+        runner.run("от пакета ничего не зависит", MainTest::testReverseTop);
+        runner.run("обратные зависимости в цикле", MainTest::testReverseCycle);
+        runner.run("--reverse в режиме real", MainTest::testReverseReal);
+        runner.run("--reverse дважды", MainTest::testReverseTwice);
         runner.run("пакета нет в PyPI", MainTest::testNotFound);
         addErrorTests(runner);
     }
@@ -163,6 +169,68 @@ public class MainTest {
     static void testBadTestName() {
         checkError("больших латинских букв", "--package", "a",
                 "--repo", SIMPLE, "--mode", "test", "--output", "g.svg");
+    }
+
+    /**
+     * Запустить программу в режиме test с опцией --reverse.
+     *
+     * @param path путь к файлу тестового репозитория
+     * @param packageName имя пакета
+     * @return результат запуска
+     */
+    static Result runReverse(String path, String packageName) {
+        return runMain("--package", packageName, "--repo", path,
+                "--mode", "test", "--output", "graph.svg", "--reverse");
+    }
+
+    /** От D зависят B и C, а от них - A. */
+    static void testReverseShared() {
+        Result result = runReverse(SIMPLE, "D");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        String expected = String.join(System.lineSeparator(),
+                "Обратные зависимости пакета D "
+                + "(пакеты, которые от него зависят):", "D <- B, C",
+                "B <- A", "C <- A", "A <- от него ничего не зависит", "");
+        TestRunner.assertEquals(expected, result.out);
+    }
+
+    /** Обратные зависимости F идут по цепочке E, C, A. */
+    static void testReverseDeep() {
+        Result result = runReverse(SIMPLE, "F");
+        TestRunner.assertContains("F <- E", result.out);
+        TestRunner.assertContains("E <- C", result.out);
+        TestRunner.assertContains("C <- A", result.out);
+        TestRunner.assertEquals(false, result.out.contains("B <-"));
+    }
+
+    /** От верхнего пакета ничего не зависит. */
+    static void testReverseTop() {
+        Result result = runReverse(SIMPLE, "A");
+        TestRunner.assertContains("A <- от него ничего не зависит",
+                result.out);
+    }
+
+    /** Обратные зависимости в графе с циклами. */
+    static void testReverseCycle() {
+        Result result = runReverse(CYCLE, "D");
+        TestRunner.assertEquals(Main.EXIT_OK, result.code);
+        TestRunner.assertContains("D <- C, D", result.out);
+        TestRunner.assertContains("C <- B", result.out);
+        TestRunner.assertContains("B <- A", result.out);
+        TestRunner.assertContains("A <- C", result.out);
+    }
+
+    /** Обратные зависимости выводятся только в режиме test. */
+    static void testReverseReal() {
+        checkError("только в режиме test", "--package", "requests",
+                "--repo", REPO_URL, "--output", "g.svg", "--reverse");
+    }
+
+    /** Опция --reverse указана дважды. */
+    static void testReverseTwice() {
+        checkError("опция указана дважды: --reverse", "--package", "A",
+                "--repo", SIMPLE, "--mode", "test", "--output", "g.svg",
+                "--reverse", "--reverse");
     }
 
     /**
